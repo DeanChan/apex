@@ -61,8 +61,18 @@ class VariableFunctionsShim(object):
                setattr(self, fn_name, _gen_VF_wrapper(fn_name))
 
 
+def patch_orig_fn(orig_fn):
+    if hasattr(orig_fn, '__module__'):
+        return orig_fn
+    else:
+        def patched(*args, **kwargs):
+            return orig_fn(*args, **kwargs)
+        return patched
+
+
 def make_cast_wrapper(orig_fn, cast_fn, handle,
                       try_caching=False):
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(*args, **kwargs):
         if not handle.is_active():
@@ -96,6 +106,7 @@ def cached_cast(mod, fn, cast_fn, handle,
 # Annoyingly, make_promote_wrapper still uses the global handle.  Once everyone
 # is on the new API and I am free to get rid of handle, I can clean this up.
 def make_promote_wrapper(orig_fn, cast_fn, handle=None):
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(*args, **kwargs):
         if not _amp_state.handle.is_active():
@@ -125,6 +136,7 @@ def promote(mod, fn, handle, verbose=False):
 def sequence_promote(mod, fn, handle, verbose=False):
     orig_fn = utils.get_func(mod, fn)
     maybe_float = utils.verbosify(utils.maybe_float, fn, verbose)
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(seq, *args, **kwargs):
         if not _amp_state.handle.is_active():
@@ -148,6 +160,7 @@ def promote_match_arg0(mod, fn, handle, verbose=False):
         return
 
     orig_fn = utils.get_func(mod, fn)
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(arg0, *args, **kwargs):
         assert compat.is_tensor_like(arg0)
@@ -170,6 +183,7 @@ def err_if_any_half(mod, fn, handle, custom_err_msg=None):
         return
 
     orig_fn = utils.get_func(mod, fn)
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(*args, **kwargs):
         types = utils.collect_fp_tensor_types(args, kwargs)
@@ -188,6 +202,7 @@ def err_if_arg0_half(mod, fn, handle, verbose=False):
         return
 
     orig_fn = utils.get_func(mod, fn)
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(arg0, *args, **kwargs):
         assert compat.is_tensor_like(arg0)
@@ -287,6 +302,7 @@ def new_rnn_cast(fn, handle, verbose=False):
         fn = fn.lower()
     orig_fn = utils.get_func(mod, fn)
     cast_fn = utils.verbosify(utils.maybe_half, fn, verbose)
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(*args, **kwargs):
         # Exact call signature from modules/rnn.py
@@ -323,6 +339,7 @@ def disable_casts(mod, fn, handle):
         return
 
     orig_fn = utils.get_func(mod, fn)
+    orig_fn = patch_orig_fn(orig_fn)
     @functools.wraps(orig_fn)
     def wrapper(*args, **kwargs):
         with handle._disable_casts():
